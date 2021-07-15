@@ -8,6 +8,12 @@ const OptimizeCSSAssetsPlugin = require('optimize-css-assets-webpack-plugin')
 const HtmlWebpackPlugin = require('html-webpack-plugin')
 const { CleanWebpackPlugin } = require('clean-webpack-plugin')
 const FriendlyErrorsWebpackPlugin = require('friendly-errors-webpack-plugin')
+const SpeedMeasureWebpackPlugin = require('speed-measure-webpack-plugin')
+const { BundleAnalyzerPlugin } = require('webpack-bundle-analyzer')
+const TerserPlugin = require('terser-webpack-plugin')
+const HardSourceWebpackPlugin = require('hard-source-webpack-plugin')
+
+const smp = new SpeedMeasureWebpackPlugin()
 
 const setMPA = () => {
   const entry = {}
@@ -25,7 +31,7 @@ const setMPA = () => {
         new HtmlWebpackPlugin({
           template: path.join(__dirname, `src/${pageName}/index.html`),
           filename: `${pageName}.html`,
-          chunks: ['vendors','commons',pageName],
+          chunks: ['vendors', 'commons', pageName],
           inject: true,
           minify: {
             html5: true,
@@ -42,11 +48,11 @@ const setMPA = () => {
     htmlWebpackPlugin
   }
 }
-const {entry,htmlWebpackPlugin} = setMPA()
+const { entry, htmlWebpackPlugin } = setMPA()
 
 
-module.exports = {
-  entry:entry,
+module.exports = smp.wrap({
+  entry: entry,
   output: {
     path: path.join(__dirname, 'dist'),
     filename: '[name]_[chunkhash:8].js'
@@ -56,7 +62,15 @@ module.exports = {
     rules: [
       {
         test: /\.js$/,
-        use: ['babel-loader']
+        exclude:'node_modules',
+        use: [
+          {
+            loader:'thread-loader',
+            options:{
+              workers: 3
+            }
+          },
+          'babel-loader?cacheDirectory=true']
       },
       {
         test: /\.css$/,
@@ -104,24 +118,35 @@ module.exports = {
       assetNameRegExp: /\.css$/g,
       cssProcessor: require('cssnano')
     }),
-    new FriendlyErrorsWebpackPlugin()
+    new FriendlyErrorsWebpackPlugin(),
+    // new BundleAnalyzerPlugin(),
+    // new webpack.DllReferencePlugin({
+    //   manifest:require('./build/library/manifest.json')
+    // }),
+    new HardSourceWebpackPlugin()
   ].concat(htmlWebpackPlugin),
-  optimization:{
-    splitChunks:{
-      minSize:0,
-      cacheGroups:{
-        commons:{
-          name:'commons',
-          chunks:'all',
-          minChunks:2
-        },
-        vendors:{
-          test:/(react|react-dom)/,
-          name:'vendors',
-          chunks:'all'
-        }
-      }
-    }
+  optimization: {
+    // splitChunks: {
+    //   minSize: 0,
+    //   cacheGroups: {
+    //     commons: {
+    //       name: 'commons',
+    //       chunks: 'all',
+    //       minChunks: 2
+    //     },
+    //     vendors: {
+    //       test: /(react|react-dom)/,
+    //       name: 'vendors',
+    //       chunks: 'all'
+    //     }
+    //   }
+    // },
+    minimizer:[
+      new TerserPlugin({
+        parallel: true,
+        cache: true
+      })
+    ]
   },
-  stats:'errors-only'
-}
+  stats: 'errors-only'
+})
